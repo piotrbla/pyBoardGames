@@ -1,48 +1,87 @@
 import pygame, sys
 from pygame.locals import *
 
-pygame.init()
-windowSurface = pygame.display.set_mode((800, 600), 0, 32)
+STICK_WIDTH = 50
+BALL_WIDTH = 25
+BALL_SLOWNESS = 6
 
-pygame.display.set_caption('Hello world!')
-# set up the colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
+SCREEN_Y_MARGIN = 60
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 
-# set up fonts
 
-basicFont = pygame.font.SysFont(None, 48)
+class MovingObject(object):
+    def __init__(self, surface, x, y, image):
+        self.x = x
+        self.y = y
+        self.surface = surface
+        self.image = image
 
-# set up the text
-text = basicFont.render('Hello world!', True, WHITE, BLUE)
-textRect = text.get_rect()
-textRect.centerx = windowSurface.get_rect().centerx
-textRect.centery = windowSurface.get_rect().centery
-# draw the white background onto the surface
-windowSurface.fill(WHITE)
-# draw a green polygon onto the surface
-pygame.draw.polygon(windowSurface, GREEN, ((146, 0), (291, 106), (236, 277), (56, 277), (0, 106)))
-# draw some blue lines onto the surface
-pygame.draw.line(windowSurface, BLUE, (60, 60), (120, 60), 4)
-pygame.draw.line(windowSurface, BLUE, (120, 60), (60, 120))
-pygame.draw.line(windowSurface, BLUE, (60, 120), (120, 120), 4)
-# draw a blue circle onto the surface
-pygame.draw.circle(windowSurface, BLUE, (300, 50), 20, 0)
-# draw a red ellipse onto the surface
-pygame.draw.ellipse(windowSurface, RED, (300, 250, 40, 80), 1)
-# draw the text's background rectangle onto the surface
-pygame.draw.rect(windowSurface, RED, (textRect.left - 20, textRect.top - 20, textRect.width + 40, textRect.height + 40))
-# get a pixel array of the surface
-pixArray = pygame.PixelArray(windowSurface)
-pixArray[480][380] = BLACK
-del pixArray
-# draw the text onto the surface
-windowSurface.blit(text, textRect)
-# draw the window onto the screen
-pygame.display.update()
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
+
+    def draw(self):
+        self.surface.blit(self.image, (self.x, self.y))
+
+
+class Stick(MovingObject):
+    def __init__(self, surface, x, y, image):
+        super().__init__(surface, x, y, image)
+
+    def move(self, dx, dy):
+        super().move(dx, dy)
+        if self.x + STICK_WIDTH > SCREEN_WIDTH:
+            self.x = SCREEN_WIDTH - STICK_WIDTH
+        if self.x < 0:
+            self.x = 0
+
+    def draw(self):
+        super().draw()
+
+    def close_to(self, ball):
+        if abs(self.x - ball.x) < STICK_WIDTH and abs(self.y - ball.y) < BALL_WIDTH and not ball.was_last_bounced:
+            return True
+        else:
+            return False
+
+
+class Ball(MovingObject):
+    def __init__(self, surface, x, y, image):
+        super().__init__(surface, x, y, image)
+        self.direction_x = 1
+        self.direction_y = 1
+        self.was_last_bounced = False
+        self.last_bounce_count = 0
+
+    def move(self):
+        super().move(self.direction_x, self.direction_y)
+        if self.x + BALL_WIDTH > SCREEN_WIDTH:
+            self.x = SCREEN_WIDTH - BALL_WIDTH
+            self.direction_x *= -1
+        if self.x < 0:
+            self.x = 0
+            self.direction_x *= -1
+        if self.y + BALL_WIDTH > SCREEN_HEIGHT:
+            self.y = SCREEN_HEIGHT - BALL_WIDTH
+            self.direction_y *= -1
+        if self.y < 0:
+            self.y = 0
+            self.direction_y *= -1
+        if self.was_last_bounced:
+            self.last_bounce_count += 1
+            if self.last_bounce_count > BALL_WIDTH + 1:
+                self.was_last_bounced = False
+
+    def bounce(self):
+        if self.was_last_bounced:
+            return
+        self.was_last_bounced = True
+        self.last_bounce_count = 1
+        self.direction_y *= -1
+
+    def draw(self):
+        super().draw()
 
 
 def the_end():
@@ -50,11 +89,76 @@ def the_end():
     sys.exit()
 
 
-while True:
-    if pygame.key.get_pressed()[pygame.K_ESCAPE]:
-        print("Esc")
-        the_end()
-    for event in pygame.event.get():
-        if event.type == QUIT:
-            print("x")
+def main():
+    sticks = []
+    balls = []
+    pygame.init()
+    window_surface = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
+
+    pygame.display.set_caption('Simple pong!')
+    WHITE = (255, 255, 255)
+
+    window_surface.fill(WHITE)
+    stick_image = pygame.image.load('stick.png')
+    upper_stick = Stick(window_surface, SCREEN_WIDTH / 2 - STICK_WIDTH / 2, SCREEN_Y_MARGIN, stick_image)
+    lower_stick = Stick(window_surface, SCREEN_WIDTH / 2 - STICK_WIDTH / 2, SCREEN_HEIGHT - SCREEN_Y_MARGIN,
+                        stick_image)
+    sticks.append(upper_stick)
+    sticks.append(lower_stick)
+
+    ball_image = pygame.image.load('ball.png')
+    balls.append(Ball(window_surface, SCREEN_WIDTH / 2, SCREEN_Y_MARGIN, ball_image))
+    balls.append(Ball(window_surface, SCREEN_WIDTH / 2, SCREEN_HEIGHT - SCREEN_Y_MARGIN, ball_image))
+
+    for stick in sticks:
+        stick.draw()
+    # pygame.draw.circle(window_surface, BLUE, (300, 50), 20, 0)
+    # pygame.draw.ellipse(window_surface, RED, (300, 250, 40, 80), 1)
+    pygame.display.update()
+    tick_count = 0
+    ticker = pygame.time.Clock()
+    while True:
+        if pygame.key.get_pressed()[pygame.K_ESCAPE]:
+            print("Esc")
             the_end()
+        update = False
+        tick_count += ticker.tick()
+        if tick_count > BALL_SLOWNESS:
+            for ball in balls:
+                ball.move()
+            update = True
+            tick_count = 0
+        if pygame.key.get_pressed()[pygame.K_LEFT]:
+            update = True
+            lower_stick.move(-1, 0)
+
+        if pygame.key.get_pressed()[pygame.K_RIGHT]:
+            update = True
+            lower_stick.move(1, 0)
+
+        if pygame.key.get_pressed()[pygame.K_a]:
+            update = True
+            upper_stick.move(-1, 0)
+
+        if pygame.key.get_pressed()[pygame.K_d]:
+            update = True
+            upper_stick.move(1, 0)
+
+        if update:
+            for stick in sticks:
+                for ball in balls:
+                    if stick.close_to(ball):
+                        ball.bounce()
+            for stick in sticks:
+                stick.draw()
+            for ball in balls:
+                ball.draw()
+            pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                the_end()
+
+
+if __name__ == "__main__":
+    main()
